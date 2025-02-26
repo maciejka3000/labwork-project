@@ -1,0 +1,35 @@
+
+### DATASET PATHS
+# use absolute paths
+# path to downloaded dataset
+path_main_db: '/home/maciejka/Desktop/school/S8/labwork-project/db/input'
+
+# path to prepreprocessed dataset
+path_prepreprocessed_db: '/home/maciejka/Desktop/school/S8/labwork-project/db/dataset'
+
+# path to preprocessed dataset
+path_preprocessed_db: '/home/maciejka/Desktop/school/S8/labwork-project/db/dataset_preprocessed'
+
+### PREPROCESSING SETTINGS
+
+# amount of images in dataset
+dataset_size: 40
+
+# destination image size
+img_size: [256, 256]
+
+# data split [train, val, test] - sums to 1
+data_split: [0.6, 0.2, 0.2]
+
+# resizing policy:
+#   - stretch: fit image to img_size
+#   - keep_proportions: keep proportions by adding black boundaries around the photo
+resizing_policy: 'keep_proportions'
+
+# max_hz: cutoff image frequencies above set value
+max_hz: 100
+
+
+### TRAINING SETTINGS
+# there will be a lot of settings when model will be set...
+
