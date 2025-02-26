@@ -2,13 +2,13 @@
 ### DATASET PATHS
 # use absolute paths
 # path to downloaded dataset
-path_main_db: '/home/maciejka/Desktop/school/S8/labwork-project/db/input'
+path_main_db: '/db/input'
 
 # path to prepreprocessed dataset
-path_prepreprocessed_db: '/home/maciejka/Desktop/school/S8/labwork-project/db/dataset'
+path_prepreprocessed_db: '/db/dataset'
 
 # path to preprocessed dataset
-path_preprocessed_db: '/home/maciejka/Desktop/school/S8/labwork-project/db/dataset_preprocessed'
+path_preprocessed_db: '/db/dataset_preprocessed'
 
 ### PREPROCESSING SETTINGS
 
