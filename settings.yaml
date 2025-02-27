@@ -2,32 +2,43 @@
 ### DATASET PATHS
 # use absolute paths
 # path to downloaded dataset
-path_main_db: '/db/input'
+path_main_db: ''
 
 # path to prepreprocessed dataset
-path_prepreprocessed_db: '/db/dataset'
+path_prepreprocessed_db: ''
 
 # path to preprocessed dataset
-path_preprocessed_db: '/db/dataset_preprocessed'
+path_preprocessed_db: ''
 
 ### PREPROCESSING SETTINGS
 
-# amount of images in dataset
+# amount of images in dataset, write 'max' to select every image in downloaded dataset
 dataset_size: 40
 
 # destination image size
 img_size: [256, 256]
-
-# data split [train, val, test] - sums to 1
-data_split: [0.6, 0.2, 0.2]
 
 # resizing policy:
 #   - stretch: fit image to img_size
 #   - keep_proportions: keep proportions by adding black boundaries around the photo
 resizing_policy: 'keep_proportions'
 
-# max_hz: cutoff image frequencies above set value
-max_hz: 100
+# resizing method: use 'nearest', 'linear', 'cubic' or 'lanczos'
+resizing_method: 'lanczos'
+
+# data split [train, test, val] - sums to 1
+data_split: [0.6, 0.2, 0.2]
+
+## PREPROCESSING - OUTPUT IMAGE OPTIONS
+
+# max_hz: pick random value between max_hz[0] and max_hz[1] and cut the frequencies above
+max_hz: [30, 100]
+
+# gaussian_mean: pick random value between gaussian_mean[0] and gaussian_mean[1] and apply gaussian noise with selected mu
+gaussian_mean: [-10, 10]
+
+# gaussian_std: pick random value between gaussian_std[0] and gaussian_std[1] and apply gaussian noise with selected sigma
+gaussian_std: [5, 15]
 
 
 ### TRAINING SETTINGS
