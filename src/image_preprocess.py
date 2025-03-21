@@ -1,4 +1,4 @@
-
+from random import random
 
 import cv2
 import os
@@ -6,6 +6,7 @@ import glob
 from typing import Literal, List
 import math
 import numpy as np
+import random
 
 ###### TODO
 # 1. split resizing with keeping proportions into two-step process:
@@ -112,6 +113,15 @@ class ImageProcess:
         self.image = noisy_img
         pass
 
+    def dist_blackholes(self, min_radius:float, max_radius:float, hole_amount:int, circle_color:tuple = (0, 0, 0)):
+        img_size = self.image.shape[0:2]
+        for hole in range(hole_amount):
+            selected_radius = random.randint(int(min_radius), int(max_radius))
+            selected_center_y = random.randint(0, img_size[0])
+            selected_center_x = random.randint(0, img_size[1])
+            self.image = cv2.circle(self.image, (selected_center_x, selected_center_y), selected_radius, circle_color, -1)
+
+
     def save_image(self, path):
         cv2.imwrite(path, self.image)
 
@@ -121,5 +131,5 @@ if __name__ == "__main__":
     path = '/home/maciejka/Desktop/school/S8/labwork-project/db/dataset/11.jpg'
     img = ImageProcess(path)
     img.resize_image([256, 256], 'keep_proportions', interpolation="cubic")
-    img.dist_lowpass(50)
-    img.save_image('test.jpg')
+    img.dist_blackholes(10, 20, 3)
+    img.save_image('output.jpg')
