@@ -32,20 +32,20 @@ data_split: [0.7, 0.15, 0.15]
 ## PREPROCESSING - OUTPUT IMAGE OPTIONS
 
 # max_hz: used in low-pass filtering of an image. pick random value between max_hz[0] and max_hz[1] and cut the frequencies above
-max_hz: [30, 100]
+max_hz: [30, 150]
 
 # gaussian_mean: used to apply gaussian noise. pick random value between gaussian_mean[0] and gaussian_mean[1] and apply gaussian noise with selected mu
-gaussian_mean: [-10, 10]
+gaussian_mean: [-20, 20]
 
 # gaussian_std: used to apply gaussian noise. pick random value between gaussian_std[0] and gaussian_std[1] and apply gaussian noise with selected sigma
-gaussian_std: [5, 15]
+gaussian_std: [5, 20]
 
 # hole_radius: used to generate holes on an image. pick random value between hole_radius[0] and hole_radius[1], then erase the part of the image by
 # generating black holes with selected radius
-hole_radius: [10, 20]
+hole_radius: [3, 8]
 
 # hole_amount: used to generate holes on image. Defines the amount of holes on the image, by selecting random int between hole_amount[0] and hole_amount[1]
-hole_amount: [0, 4]
+hole_amount: [0, 2]
 
 
 ### TRAINING SETTINGS
