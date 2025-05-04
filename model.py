@@ -14,6 +14,7 @@ from torchvision import transforms
 from PIL import Image
 import os
 from matplotlib import pyplot as plt
+import shutil
 
 
 def check_and_make(modelpath):
@@ -22,7 +23,7 @@ def check_and_make(modelpath):
         mkdir(modelpath)
     else:
         print('{} folder detected, removing'.format(modelpath))
-        os.rmdir(modelpath)
+        shutil.rmtree(modelpath)
         mkdir(modelpath)
 
 def unnormalize(img_tensor):
@@ -253,6 +254,23 @@ if __name__ == "__main__":
         [4, 3, 64, 256],
         [4, 3, 128, 128],
         [4, 3, 256, 64],
+        [1, 3, 64, 512],
+        [1, 3, 128, 256],
+        [1, 3, 256, 128],
+        [1, 3, 512, 64],
+        [2, 3, 64, 512],
+        [2, 3, 128, 256],
+        [2, 3, 256, 128],
+        [2, 3, 512, 64],
+        [3, 3, 64, 512],
+        [3, 3, 128, 256],
+        [3, 3, 256, 128],
+        [3, 3, 512, 64],
+        [4, 3, 64, 512],
+        [4, 3, 128, 256],
+        [4, 3, 256, 128],
+        [4, 3, 512, 64],
+
     ]
     transform = transforms.Compose([
         transforms.Resize((256, 256)),
@@ -265,9 +283,9 @@ if __name__ == "__main__":
     val_dataset = PariedImages('db/dataset_preprocessed/val', transform=transform)
     test_dataset = PariedImages('db/dataset_preprocessed/test', transform=transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, num_workers=12, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=256, shuffle=True, num_workers=12, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=256, shuffle=True, num_workers=12, pin_memory=True)
 
     inputs, outputs = next(iter(train_loader))
     print(inputs.shape, outputs.shape)
@@ -281,10 +299,22 @@ if __name__ == "__main__":
 
     show_pair(inputs, outputs, 3)
     i = 0
+    print('----TRAINING MODELS----')
+    print('')
+    for training_parameter in training_parameters:
+        check_model_parameters(*training_parameter)
+
     for loss, loss_name in zip([mse_loss, frequency_loss], ['mse', 'frequency']):
         for training_parameter in training_parameters:
             i += 1
             savename = 'model_{}_{}_loss_{}stacks_{}colors_{}Csize_{}Zsise'.format(i, loss_name, *training_parameter)
+            print(' TRAINING NO {}'.format(i))
+            print('Parameters:')
+            print('Loss fcn: {}'.format(loss_name))
+            print('Stacks: {}'.format(training_parameter[0]))
+            print('C_size: {}'.format(training_parameter[2]))
+            print('Z_size: {}'.format(training_parameter[3]))
+
             model = ChainedAutoencoder(*training_parameter)
             model, history = train_model(model, loss, train_loader, val_loader, 1)
 
