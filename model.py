@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+from torchvision.models.optical_flow.raft import ResidualBlock
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
@@ -60,8 +61,8 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def check_model_parameters(n_stacks, in_channels = 3, C_ref = 64, Z_ref = 128):
-    model = ChainedAutoencoder(n_stacks, in_channels, C_ref, Z_ref)
+def check_model_parameters(n_stacks, in_channels = 3, C_ref = 64, Z_ref = 128, type='normal'):
+    model = ChainedAutoencoder(n_stacks, in_channels, C_ref, Z_ref, type)
     print(f"Model with {n_stacks} stacks has {count_parameters(model):,} trainable parameters")
 
 def train_model(model, loss_fcn, train_ds, val_ds, epochs):
@@ -82,7 +83,8 @@ def train_model(model, loss_fcn, train_ds, val_ds, epochs):
 
     model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
     for epoch in range(epochs):
         model.train()
@@ -141,7 +143,6 @@ def frequency_loss(predicted, target, p: float = 0.8) -> torch.Tensor:
     return mse_spatial + p * mse_freq
 
 def focal_frequency_loss(predicted, target, gamma: float = 1.5, reduction: str = 'mean') -> torch.Tensor:
-    print(target.shape)
 
     F_predicted = torch.fft.fft2(predicted, norm='ortho')
     F_target = torch.fft.fft2(target, norm='ortho')
@@ -188,39 +189,122 @@ class SmallAutoencoder(nn.Module):
             nn.ConvTranspose2d(base_channels, image_channels, 4, 2, 1),
             nn.Sigmoid(),
         ])
-    
-    
+
     def forward(self, x):
         # Encoder path
         for encoder in self.encoders:
             x = encoder(x)
-
         # Flatten and encode to latent space
         batch, c, h, w = x.shape
         x = x.view(batch, -1)
         z = self.fc_enc(x)
-
         # Decode from latent space
         x = self.fc_dec(z)
         x = x.view(batch, c, h, w)
-
         # Decoder path
         for decoder in self.decoders:
             x = decoder(x)
-
         return x
+
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.conv1 = nn.Conv2d(channels, channels, 3, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.relu = nn.LeakyReLU(inplace=True)
+        self.conv2 = nn.Conv2d(channels, channels, 3, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+    def forward(self, x):
+        identity = x
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        return self.relu(out + identity)
+
+class UnetAutoencoder(nn.Module):
+    def __init__(self, image_channels, base_channels, latent_dim):
+        super().__init__()
+        # encoder
+        self.enc1 = nn.Sequential(
+            nn.Conv2d(image_channels, base_channels, 4, 2, 1),
+            nn.BatchNorm2d(base_channels),
+            nn.LeakyReLU(),
+            ResidualBlock(base_channels),
+        )
+
+        self.enc2 = nn.Sequential(
+            nn.Conv2d(base_channels, base_channels * 2, 4, 2, 1),
+            nn.BatchNorm2d(base_channels * 2),
+            nn.LeakyReLU(),
+            ResidualBlock(base_channels * 2),
+        )
+        self.enc3 = nn.Sequential(
+            nn.Conv2d(base_channels * 2, base_channels * 4, 4, 2, 1),
+            nn.BatchNorm2d(base_channels * 4),
+            nn.LeakyReLU(),
+            ResidualBlock(base_channels * 4),
+        )
+
+        self.flatten = nn.Flatten()
+        self.fc_enc = nn.Linear(base_channels*4*32*32, latent_dim)
+        self.fc_dec = nn.Linear(latent_dim, base_channels*4*32*32)
+
+        # decoder
+        self.dec3 = nn.Sequential(
+            ResidualBlock(base_channels * 4),
+            nn.ConvTranspose2d(base_channels * 4, base_channels * 2, 4, 2, 1),
+            nn.BatchNorm2d(base_channels * 2),
+            nn.LeakyReLU(inplace=True),
+        )
+
+        self.dec2 = nn.Sequential(
+            ResidualBlock(base_channels * 2),
+            nn.ConvTranspose2d(base_channels * 2, base_channels, 4, 2, 1),
+            nn.BatchNorm2d(base_channels),
+            nn.LeakyReLU(inplace=True),
+        )
+
+        self.dec1 = nn.Sequential(
+            ResidualBlock(base_channels),
+            nn.ConvTranspose2d(base_channels, image_channels, 4, 2, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        e1 = self.enc1(x)
+        e2 = self.enc2(e1)
+        e3 = self.enc3(e2)
+
+        z = self.fc_enc(self.flatten(e3))
+        x_latent = self.fc_dec(z).view(e3.shape)
+
+        d3 = self.dec3(e3 + x_latent)
+        d2 = self.dec2(d3 + e2)
+        d1 = self.dec1(d2 + e1)
+
+        return d1
+
+
+    
+
 
 
 class ChainedAutoencoder(nn.Module):
-    def __init__(self, num_aes, in_channels = 3, C_ref = 64, Z_ref = 128):
+    def __init__(self, num_aes, in_channels = 3, C_ref = 64, Z_ref = 128, type='normal'):
         super(ChainedAutoencoder, self).__init__()
         s = 1.0 / math.sqrt(num_aes)
         c = max(1, int(C_ref * s))
         z = max(1, int(Z_ref * s))
-
-        self.aes = nn.ModuleList([
-            SmallAutoencoder(in_channels, c, z) for _ in range(num_aes)
-        ])
+        if type == 'normal':
+            self.aes = nn.ModuleList([
+                SmallAutoencoder(in_channels, c, z) for _ in range(num_aes)
+            ])
+        elif type == 'unet':
+            self.aes = nn.ModuleList([
+                UnetAutoencoder(in_channels, c, z) for _ in range(num_aes)
+            ])
+        else:
+            raise ValueError('type must be either normal or unet')
 
     def forward(self, x):
         out = x
@@ -259,12 +343,12 @@ if __name__ == "__main__":
 
 
     training_parameters = [
-        [1, 3, 64, 256],
-        [2, 3, 64, 256]
+        [1, 3, 64, 1024],
+        [2, 3, 64, 1024]
     ]
     transform = transforms.Compose([
         transforms.Resize((256, 256)),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+        #transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         transforms.ToTensor(),
         # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
@@ -273,9 +357,9 @@ if __name__ == "__main__":
     val_dataset = PariedImages('db/dataset_preprocessed/val', transform=transform)
     test_dataset = PariedImages('db/dataset_preprocessed/test', transform=transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, num_workers=12, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=256, shuffle=True, num_workers=12, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=256, shuffle=True, num_workers=12, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=12, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=True, num_workers=12, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True, num_workers=12, pin_memory=True)
 
     inputs, outputs = next(iter(train_loader))
     print(inputs.shape, outputs.shape)
@@ -292,9 +376,9 @@ if __name__ == "__main__":
     print('----TRAINING MODELS----')
     print('')
     for training_parameter in training_parameters:
-        check_model_parameters(*training_parameter)
+        check_model_parameters(*training_parameter, 'unet')
 
-    for loss, loss_name in zip([focal_frequency_loss, mse_loss, frequency_loss], ['focal_frequency_loss', 'mse_loss', 'frequency_loss']):
+    for loss, loss_name in zip([focal_frequency_loss, mse_loss, frequency_loss], ['focal', 'mse', 'frequency']):
         for training_parameter in training_parameters:
             i += 1
             savename = 'model_{}_{}_loss_{}stacks_{}colors_{}Csize_{}Zsise'.format(i, loss_name, *training_parameter)
@@ -305,7 +389,7 @@ if __name__ == "__main__":
             print('C_size: {}'.format(training_parameter[2]))
             print('Z_size: {}'.format(training_parameter[3]))
 
-            model = ChainedAutoencoder(*training_parameter)
+            model = ChainedAutoencoder(*training_parameter, 'unet')
             model, history = train_model(model, loss, train_loader, val_loader, 45)
 
             model_savename = os.path.join(modelpath, '{}.pth'.format(savename))
