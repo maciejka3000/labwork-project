@@ -83,7 +83,7 @@ def train_model(model, loss_fcn, train_ds, val_ds, epochs):
 
     model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
     for epoch in range(epochs):
@@ -237,12 +237,14 @@ class UnetAutoencoder(nn.Module):
             nn.BatchNorm2d(base_channels * 2),
             nn.LeakyReLU(),
             ResidualBlock(base_channels * 2),
+            nn.Dropout2d(0.2),
         )
         self.enc3 = nn.Sequential(
             nn.Conv2d(base_channels * 2, base_channels * 4, 4, 2, 1),
             nn.BatchNorm2d(base_channels * 4),
             nn.LeakyReLU(),
             ResidualBlock(base_channels * 4),
+            nn.Dropout2d(0.2),
         )
 
         self.flatten = nn.Flatten()
@@ -255,6 +257,7 @@ class UnetAutoencoder(nn.Module):
             nn.ConvTranspose2d(base_channels * 4, base_channels * 2, 4, 2, 1),
             nn.BatchNorm2d(base_channels * 2),
             nn.LeakyReLU(inplace=True),
+            nn.Dropout2d(0.2),
         )
 
         self.dec2 = nn.Sequential(
@@ -262,6 +265,7 @@ class UnetAutoencoder(nn.Module):
             nn.ConvTranspose2d(base_channels * 2, base_channels, 4, 2, 1),
             nn.BatchNorm2d(base_channels),
             nn.LeakyReLU(inplace=True),
+            nn.Dropout2d(0.2),
         )
 
         self.dec1 = nn.Sequential(
