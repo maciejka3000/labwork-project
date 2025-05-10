@@ -32,7 +32,7 @@ data_split: [0.7, 0.15, 0.15]
 ## PREPROCESSING - OUTPUT IMAGE OPTIONS
 
 # max_hz: used in low-pass filtering of an image. pick random value between max_hz[0] and max_hz[1] and cut the frequencies above
-max_hz: [30, 150]
+max_hz: [15, 80]
 
 # gaussian_mean: used to apply gaussian noise. pick random value between gaussian_mean[0] and gaussian_mean[1] and apply gaussian noise with selected mu
 gaussian_mean: [-20, 20]

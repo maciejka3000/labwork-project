@@ -16,6 +16,11 @@ from PIL import Image
 import os
 from matplotlib import pyplot as plt
 import shutil
+from src.image_preprocess import ImageProcess
+import cv2
+import yaml
+import glob
+import random
 
 
 def check_and_make(modelpath):
@@ -56,6 +61,25 @@ def show_pair(inputs, targets, num_images = 1):
 
     plt.tight_layout()
     plt.show()
+
+def show_augumentation(ds, num_images = 1, n_image = 3):
+    fig, axs = plt.subplots(num_images, 2, figsize=(8, num_images * 3))
+
+    for i in range(num_images):
+        noisy, clean = ds[n_image]
+        noisy_np = noisy.permute(1, 2, 0).numpy()
+        clean_np = clean.permute(1, 2, 0).numpy()
+
+        axs[i, 0].imshow(clean_np)
+        axs[i, 0].set_title(f"Clean Image {i + 1}")
+        axs[i, 0].axis("off")
+
+        axs[i, 1].imshow(noisy_np)
+        axs[i, 1].set_title(f"Noisy Image {i + 1}")
+        axs[i, 1].axis("off")
+
+    fig.tight_layout()
+    fig.show()
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -121,6 +145,7 @@ def train_model(model, loss_fcn, train_ds, val_ds, epochs):
         history['loss'].append(avg_train_loss)
         history['val_loss'].append(avg_val_loss)
         history['time'].append(time_epoch)
+        scheduler.step()
 
         print(f"Epoch {epoch+1}/{epochs} - Train loss: {avg_train_loss:.4f} - Val loss: {avg_val_loss:.4f} - Time: {time_epoch:.2f}s")
 
@@ -289,7 +314,7 @@ class UnetAutoencoder(nn.Module):
         return d1
 
 
-    
+
 
 
 
@@ -341,68 +366,66 @@ class PariedImages(Dataset):
 
         return input_img, output_img
 
+class PairedDSVariableEpoch(Dataset):
+    def __init__(self, image_paths, transform=None):
+        super().__init__()
+        self.image_paths = glob.glob(image_paths + '/*.bmp')
+        self.transform = transform
+        with open('settings.yaml', 'r') as f:
+            self.settings = yaml.safe_load(f)
+
+        self.im_sz = self.settings['img_size']
+        self.im_max_hz = self.settings['max_hz']
+        self.im_gaussian_mu = self.settings['gaussian_mean']
+        self.im_gaussian_std = self.settings['gaussian_std']
+        self.im_holes_amount = self.settings['hole_amount']
+        self.im_holes_radius = self.settings['hole_radius']
+        self.im_resizing_policy = self.settings['resizing_policy']
+        self.im_resizing_method = self.settings['resizing_method']
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        output_img = ImageProcess(self.image_paths[idx])
+        if output_img.original_image.shape != (*self.im_sz, 3):
+            output_img.resize_image(self.im_sz, self.im_resizing_policy, self.im_resizing_method)
+
+        max_hz = random.uniform(self.im_max_hz[0], self.im_max_hz[1])
+        mu = random.uniform(self.im_gaussian_mu[0], self.im_gaussian_mu[1])
+        sigma = random.uniform(self.im_gaussian_std[0], self.im_gaussian_std[1])
+        hole_amount = random.randint(self.im_holes_amount[0], self.im_holes_amount[1])
+
+        output_img.dist_blackholes(self.im_holes_radius[0], self.im_holes_radius[1], hole_amount)
+        output_img.dist_lowpass(max_hz)
+        output_img.dist_noise_gaussian(mu, sigma)
+
+        out_img = cv2.cvtColor(output_img.original_image, cv2.COLOR_BGR2RGB)
+        in_img = cv2.cvtColor(output_img.image, cv2.COLOR_BGR2RGB)
 
 
-if __name__ == "__main__":
+        out_img = Image.fromarray(out_img)
+        in_img = Image.fromarray(in_img)
 
+        if self.transform:
+            in_img = self.transform(in_img)
+            out_img = self.transform(out_img)
 
-    training_parameters = [
-        [1, 3, 64, 1024],
-        [2, 3, 64, 1024]
-    ]
+        return in_img, out_img
+
+if __name__ == '__main__':
     transform = transforms.Compose([
         transforms.Resize((256, 256)),
-        #transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         transforms.ToTensor(),
         # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
-
-    train_dataset = PariedImages('db/dataset_preprocessed/train', transform=transform)
-    val_dataset = PariedImages('db/dataset_preprocessed/val', transform=transform)
-    test_dataset = PariedImages('db/dataset_preprocessed/test', transform=transform)
-
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=12, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=True, num_workers=12, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True, num_workers=12, pin_memory=True)
+    train_dataset = PairedDSVariableEpoch('db/dataset_preprocessed/train/input', transform=transform)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=16, pin_memory=True)
 
     inputs, outputs = next(iter(train_loader))
-    print(inputs.shape, outputs.shape)
-    print(inputs[1][1].max())
-    modelpath =  os.path.join(os.getcwd(), 'models')
-    historypath = os.path.join(os.getcwd(), 'history')
-
-
-    check_and_make(modelpath)
-    check_and_make(historypath)
-
     show_pair(inputs, outputs, 3)
-    i = 0
-    print('----TRAINING MODELS----')
-    print('')
-    for training_parameter in training_parameters:
-        check_model_parameters(*training_parameter, 'unet')
-
-    for loss, loss_name in zip([focal_frequency_loss, mse_loss, frequency_loss], ['focal', 'mse', 'frequency']):
-        for training_parameter in training_parameters:
-            i += 1
-            savename = 'model_{}_{}_loss_{}stacks_{}colors_{}Csize_{}Zsise'.format(i, loss_name, *training_parameter)
-            print(' TRAINING NO {}'.format(i))
-            print('Parameters:')
-            print('Loss fcn: {}'.format(loss_name))
-            print('Stacks: {}'.format(training_parameter[0]))
-            print('C_size: {}'.format(training_parameter[2]))
-            print('Z_size: {}'.format(training_parameter[3]))
-
-            model = ChainedAutoencoder(*training_parameter, 'unet')
-            model, history = train_model(model, loss, train_loader, val_loader, 45)
-
-            model_savename = os.path.join(modelpath, '{}.pth'.format(savename))
-            history_savename = os.path.join(historypath, '{}.csv'.format(savename))
-
-            torch.save(model.state_dict(), model_savename)
-            df = pd.DataFrame.from_dict(history)
-            df.insert(0, 'epoch', df.index + 1)
-            df.to_csv(history_savename, index = False)
+    show_augumentation(train_dataset, 3, 4)
 
     #for traing_parameter in training_parameters:
         #model = ChainedAutoencoder(*traing_parameter)
