@@ -140,6 +140,27 @@ def frequency_loss(predicted, target, p: float = 0.8) -> torch.Tensor:
 
     return mse_spatial + p * mse_freq
 
+def focal_frequency_loss(predicted, target, gamma: float = 1.5, reduction: str = 'mean') -> torch.Tensor:
+    print(target.shape)
+
+    F_predicted = torch.fft.fft2(predicted, norm='ortho')
+    F_target = torch.fft.fft2(target, norm='ortho')
+
+    F_diff = F_predicted - F_target
+    eps = 1e-8
+    mag = torch.abs(F_diff) + eps
+    weight = mag.pow(gamma)
+    loss_map = weight * mag.pow(2)
+
+    loss_per_sample = loss_map.view(loss_map.size(0), -1).sum(dim=1)
+
+    if reduction == 'mean':
+        return loss_per_sample.mean()
+    elif reduction == 'sum':
+        return loss_per_sample.sum()
+    else:
+        raise ValueError(f"Invalid reduction mode: {reduction}")
+
 
 class SmallAutoencoder(nn.Module):
     def __init__(self, image_channels, base_channels, latent_dim):
@@ -238,39 +259,8 @@ if __name__ == "__main__":
 
 
     training_parameters = [
-        [1, 3, 32, 512],
         [1, 3, 64, 256],
-        [1, 3, 128, 128],
-        [1, 3, 256, 64],
-        [2, 3, 32, 512],
-        [2, 3, 64, 256],
-        [2, 3, 128, 128],
-        [2, 3, 256, 64],
-        [3, 3, 32, 512],
-        [3, 3, 64, 256],
-        [3, 3, 128, 128],
-        [3, 3, 256, 64],
-        [4, 3, 32, 512],
-        [4, 3, 64, 256],
-        [4, 3, 128, 128],
-        [4, 3, 256, 64],
-        [1, 3, 64, 512],
-        [1, 3, 128, 256],
-        [1, 3, 256, 128],
-        [1, 3, 512, 64],
-        [2, 3, 64, 512],
-        [2, 3, 128, 256],
-        [2, 3, 256, 128],
-        [2, 3, 512, 64],
-        [3, 3, 64, 512],
-        [3, 3, 128, 256],
-        [3, 3, 256, 128],
-        [3, 3, 512, 64],
-        [4, 3, 64, 512],
-        [4, 3, 128, 256],
-        [4, 3, 256, 128],
-        [4, 3, 512, 64],
-
+        [2, 3, 64, 256]
     ]
     transform = transforms.Compose([
         transforms.Resize((256, 256)),
@@ -304,7 +294,7 @@ if __name__ == "__main__":
     for training_parameter in training_parameters:
         check_model_parameters(*training_parameter)
 
-    for loss, loss_name in zip([mse_loss, frequency_loss], ['mse', 'frequency']):
+    for loss, loss_name in zip([focal_frequency_loss, mse_loss, frequency_loss], ['focal_frequency_loss', 'mse_loss', 'frequency_loss']):
         for training_parameter in training_parameters:
             i += 1
             savename = 'model_{}_{}_loss_{}stacks_{}colors_{}Csize_{}Zsise'.format(i, loss_name, *training_parameter)
@@ -316,7 +306,7 @@ if __name__ == "__main__":
             print('Z_size: {}'.format(training_parameter[3]))
 
             model = ChainedAutoencoder(*training_parameter)
-            model, history = train_model(model, loss, train_loader, val_loader, 1)
+            model, history = train_model(model, loss, train_loader, val_loader, 45)
 
             model_savename = os.path.join(modelpath, '{}.pth'.format(savename))
             history_savename = os.path.join(historypath, '{}.csv'.format(savename))
