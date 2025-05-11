@@ -5,13 +5,14 @@ if __name__ == "__main__":
     augment_everytime = True
     batch_size = 64
     training_parameters = [
-        [1, 3, 64, 128],
-        [2, 3, 64, 128]
+        [1, 3, 64, 1024],
+        [2, 3, 64, 1024]
     ]
+    epoch_amount = 15
 
     transform = transforms.Compose([
         transforms.Resize((256, 256)),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+        #transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         transforms.ToTensor(),
         # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
@@ -19,8 +20,8 @@ if __name__ == "__main__":
     num_cores = os.cpu_count()
     if augment_everytime:
         train_dataset = PairedDSVariableEpoch('db/dataset_preprocessed/train/input', transform=transform)
-        val_dataset = PairedDSVariableEpoch('db/dataset_preprocessed/val/input', transform=transform)
-        test_dataset = PairedDSVariableEpoch('db/dataset_preprocessed/test/input', transform=transform)
+        val_dataset = PariedImages('db/dataset_preprocessed/val', transform=transform)
+        test_dataset = PariedImages('db/dataset_preprocessed/test', transform=transform)
     else:
         train_dataset = PariedImages('db/dataset_preprocessed/train', transform=transform)
         val_dataset = PariedImages('db/dataset_preprocessed/val', transform=transform)
@@ -59,7 +60,7 @@ if __name__ == "__main__":
             print('Z_size: {}'.format(training_parameter[3]))
 
             model = ChainedAutoencoder(*training_parameter, 'unet')
-            model, history = train_model(model, loss, train_loader, val_loader, 45)
+            model, history = train_model(model, loss, train_loader, val_loader, epoch_amount)
 
             model_savename = os.path.join(modelpath, '{}.pth'.format(savename))
             history_savename = os.path.join(historypath, '{}.csv'.format(savename))

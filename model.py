@@ -108,7 +108,7 @@ def train_model(model, loss_fcn, train_ds, val_ds, epochs):
     model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
 
     for epoch in range(epochs):
         model.train()
@@ -145,10 +145,16 @@ def train_model(model, loss_fcn, train_ds, val_ds, epochs):
         history['loss'].append(avg_train_loss)
         history['val_loss'].append(avg_val_loss)
         history['time'].append(time_epoch)
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            torch.save(model.state_dict(), 'best_model.pth')
+
         scheduler.step()
 
-        print(f"Epoch {epoch+1}/{epochs} - Train loss: {avg_train_loss:.4f} - Val loss: {avg_val_loss:.4f} - Time: {time_epoch:.2f}s")
 
+        print(f"Epoch {epoch+1}/{epochs} - Train loss: {avg_train_loss:.4f} - Val loss: {avg_val_loss:.4f} - Time: {time_epoch:.2f}s")
+    model.load_state_dict(torch.load('best_model.pth'))
+    os.remove('best_model.pth')
     return model, history
 
 def mse_loss(output, target):
@@ -262,14 +268,14 @@ class UnetAutoencoder(nn.Module):
             nn.BatchNorm2d(base_channels * 2),
             nn.LeakyReLU(),
             ResidualBlock(base_channels * 2),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.08),
         )
         self.enc3 = nn.Sequential(
             nn.Conv2d(base_channels * 2, base_channels * 4, 4, 2, 1),
             nn.BatchNorm2d(base_channels * 4),
             nn.LeakyReLU(),
             ResidualBlock(base_channels * 4),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.08),
         )
 
         self.flatten = nn.Flatten()
@@ -283,7 +289,7 @@ class UnetAutoencoder(nn.Module):
             nn.Conv2d(base_channels * 4, base_channels * 2, 3, padding=1),
             nn.BatchNorm2d(base_channels * 2),
             nn.LeakyReLU(inplace=True),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.08),
         )
 
         self.dec2 = nn.Sequential(
@@ -292,7 +298,7 @@ class UnetAutoencoder(nn.Module):
             nn.Conv2d(base_channels * 2, base_channels, 3, padding=1),
             nn.BatchNorm2d(base_channels),
             nn.LeakyReLU(inplace=True),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.08),
         )
 
         self.dec1 = nn.Sequential(
@@ -419,7 +425,7 @@ class PairedDSVariableEpoch(Dataset):
 if __name__ == '__main__':
     transform = transforms.Compose([
         transforms.Resize((256, 256)),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+        #transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         transforms.ToTensor(),
         # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
