@@ -254,6 +254,7 @@ class ResidualBlock(nn.Module):
 
 class UnetAutoencoder(nn.Module):
     def __init__(self, image_channels, base_channels, latent_dim):
+        layers = 'upscaling' ## upscaling or normal
         super().__init__()
         # encoder
         self.enc1 = nn.Sequential(
@@ -268,14 +269,14 @@ class UnetAutoencoder(nn.Module):
             nn.BatchNorm2d(base_channels * 2),
             nn.LeakyReLU(),
             ResidualBlock(base_channels * 2),
-            nn.Dropout2d(0.08),
+            nn.Dropout2d(0.06),
         )
         self.enc3 = nn.Sequential(
             nn.Conv2d(base_channels * 2, base_channels * 4, 4, 2, 1),
             nn.BatchNorm2d(base_channels * 4),
             nn.LeakyReLU(),
             ResidualBlock(base_channels * 4),
-            nn.Dropout2d(0.08),
+            nn.Dropout2d(0.06),
         )
 
         self.flatten = nn.Flatten()
@@ -283,30 +284,51 @@ class UnetAutoencoder(nn.Module):
         self.fc_dec = nn.Linear(latent_dim, base_channels*4*32*32)
 
         # decoder
-        self.dec3 = nn.Sequential(
-            ResidualBlock(base_channels * 4),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-            nn.Conv2d(base_channels * 4, base_channels * 2, 3, padding=1),
-            nn.BatchNorm2d(base_channels * 2),
-            nn.LeakyReLU(inplace=True),
-            nn.Dropout2d(0.08),
-        )
+        if layers == 'upscaling':
+            self.dec3 = nn.Sequential(
+                ResidualBlock(base_channels * 4),
+                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+                nn.Conv2d(base_channels * 4, base_channels * 2, 3, padding=1),
+                nn.BatchNorm2d(base_channels * 2),
+                nn.LeakyReLU(inplace=True),
+                nn.Dropout2d(0.06),
+            )
 
-        self.dec2 = nn.Sequential(
-            ResidualBlock(base_channels * 2),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-            nn.Conv2d(base_channels * 2, base_channels, 3, padding=1),
-            nn.BatchNorm2d(base_channels),
-            nn.LeakyReLU(inplace=True),
-            nn.Dropout2d(0.08),
-        )
+            self.dec2 = nn.Sequential(
+                ResidualBlock(base_channels * 2),
+                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+                nn.Conv2d(base_channels * 2, base_channels, 3, padding=1),
+                nn.BatchNorm2d(base_channels),
+                nn.LeakyReLU(inplace=True),
+                nn.Dropout2d(0.06),
+            )
 
-        self.dec1 = nn.Sequential(
-            ResidualBlock(base_channels),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-            nn.Conv2d(base_channels, image_channels, 3, padding=1),
-            nn.Sigmoid(),
-        )
+            self.dec1 = nn.Sequential(
+                ResidualBlock(base_channels),
+                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+                nn.Conv2d(base_channels, image_channels, 3, padding=1),
+                nn.Sigmoid(),
+            )
+        else:
+            self.dec3 = nn.Sequential(
+                ResidualBlock(base_channels * 4),
+                nn.ConvTranspose2d(base_channels * 4, base_channels * 2, 4, 2, 1),
+                nn.BatchNorm2d(base_channels * 2),
+                nn.LeakyReLU(inplace=True),
+            )
+
+            self.dec2 = nn.Sequential(
+                ResidualBlock(base_channels * 2),
+                nn.ConvTranspose2d(base_channels * 2, base_channels, 4, 2, 1),
+                nn.BatchNorm2d(base_channels),
+                nn.LeakyReLU(inplace=True),
+            )
+
+            self.dec1 = nn.Sequential(
+                ResidualBlock(base_channels),
+                nn.ConvTranspose2d(base_channels, image_channels, 4, 2, 1),
+                nn.Sigmoid(),
+            )
 
     def forward(self, x):
         e1 = self.enc1(x)
