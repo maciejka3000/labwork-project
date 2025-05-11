@@ -3,7 +3,7 @@ import os
 
 if __name__ == "__main__":
     augment_everytime = True
-    batch_size = 128
+    batch_size = 64
     training_parameters = [
         [1, 3, 64, 128],
         [2, 3, 64, 128]

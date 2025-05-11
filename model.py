@@ -279,7 +279,8 @@ class UnetAutoencoder(nn.Module):
         # decoder
         self.dec3 = nn.Sequential(
             ResidualBlock(base_channels * 4),
-            nn.ConvTranspose2d(base_channels * 4, base_channels * 2, 4, 2, 1),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(base_channels * 4, base_channels * 2, 3, padding=1),
             nn.BatchNorm2d(base_channels * 2),
             nn.LeakyReLU(inplace=True),
             nn.Dropout2d(0.2),
@@ -287,7 +288,8 @@ class UnetAutoencoder(nn.Module):
 
         self.dec2 = nn.Sequential(
             ResidualBlock(base_channels * 2),
-            nn.ConvTranspose2d(base_channels * 2, base_channels, 4, 2, 1),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(base_channels * 2, base_channels, 3, padding=1),
             nn.BatchNorm2d(base_channels),
             nn.LeakyReLU(inplace=True),
             nn.Dropout2d(0.2),
@@ -295,7 +297,8 @@ class UnetAutoencoder(nn.Module):
 
         self.dec1 = nn.Sequential(
             ResidualBlock(base_channels),
-            nn.ConvTranspose2d(base_channels, image_channels, 4, 2, 1),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(base_channels, image_channels, 3, padding=1),
             nn.Sigmoid(),
         )
 
